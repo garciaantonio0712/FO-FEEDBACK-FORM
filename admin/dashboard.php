@@ -32,23 +32,70 @@ if (empty($start_date) || empty($end_date)) {
 }
 
 // 2. Fetch Filtered Main Stats
-$stmt_total = $pdo->prepare("SELECT COUNT(*) FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
-$stmt_total->execute([$start_date, $end_date]);
-$total_feedbacks = $stmt_total->fetchColumn();
+// Total Feedbacks
+$stmt_total = $conn->prepare("SELECT COUNT(*) FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
+$stmt_total->bind_param("ss", $start_date, $end_date);
+$stmt_total->execute();
+$res_total = $stmt_total->get_result();
+$total_feedbacks = $res_total->fetch_row()[0];
 
-$stmt_avg = $pdo->prepare("SELECT ROUND(AVG(overall_service),2) FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
-$stmt_avg->execute([$start_date, $end_date]);
-$avg_rating = $stmt_avg->fetchColumn() ?: '0.00';
+// Average Rating
+$stmt_avg = $conn->prepare("SELECT ROUND(AVG(overall_rating),1) FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
+$stmt_avg->bind_param("ss", $start_date, $end_date);
+$stmt_avg->execute();
+$res_avg = $stmt_avg->get_result();
+$avg_rating = $res_avg->fetch_row()[0] ?: '0.0';
 
-$stmt_recent = $pdo->prepare("SELECT COUNT(*) FROM guest_feedbacks WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+// Recent Count
+$stmt_recent = $conn->prepare("SELECT COUNT(*) FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
+$stmt_recent->bind_param("ss", $start_date, $end_date);
 $stmt_recent->execute();
-$recent_count = $stmt_recent->fetchColumn();
+$res_recent = $stmt_recent->get_result();
+$recent_count = $res_recent->fetch_row()[0];
 
-// 3. Fetch Departmental "Health"
-$dept_health = $pdo->query("SELECT AVG(frontdesk) as fd, AVG(housekeeping) as hk, AVG(fnb_service) as fnb FROM guest_feedbacks")->fetch(PDO::FETCH_ASSOC);
+/**
+ * 3. Fetch Departmental & Category Scores
+ */
+$stmt_health = $conn->prepare("SELECT 
+    AVG(frontdesk) as fd, 
+    AVG(reservations) as res, 
+    AVG(telephone_operator) as tel, 
+    AVG(valet) as val, 
+    AVG(housekeeping) as hk, 
+    AVG(accommodation) as acc, 
+    AVG(safety) as sf, 
+    AVG(security) as sec, 
+    AVG(food_quality) as fq, 
+    AVG(serving_time) as st, 
+    AVG(wait_staff) as ws, 
+    AVG(grooming) as gr, 
+    AVG(behavior) as bh, 
+    AVG(overall_service) as svc, 
+    AVG(bar) as bar, 
+    AVG(bartender) as bt 
+    FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?");
+$stmt_health->bind_param("ss", $start_date, $end_date);
+$stmt_health->execute();
+$res_health = $stmt_health->get_result();
+$dept_health = $res_health->fetch_assoc();
 
 // 4. Fetch Recent Comments Feed
-$recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_at, other_comments FROM guest_feedbacks ORDER BY submitted_at DESC LIMIT 5")->fetchAll();
+$stmt_feed = $conn->prepare("SELECT guest_name, overall_rating, submitted_at, other_comments FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ? ORDER BY submitted_at DESC LIMIT 5");
+$stmt_feed->bind_param("ss", $start_date, $end_date);
+$stmt_feed->execute();
+$res_feed = $stmt_feed->get_result();
+$recent_feedbacks = $res_feed->fetch_all(MYSQLI_ASSOC);
+
+/**
+ * Helper function to determine rating label and color
+ * Based on a 3-point scale
+ */
+function getRatingStatus($score) {
+    if ($score <= 0) return ['label' => 'No Data', 'color' => '#999', 'bg' => '#f0f0f0'];
+    if ($score >= 2.5) return ['label' => 'Excellent', 'color' => 'white', 'bg' => '#2d4c31']; // Green
+    if ($score >= 1.8) return ['label' => 'Good', 'color' => 'white', 'bg' => '#b5935b'];      // Gold
+    return ['label' => 'Needs Improvement', 'color' => 'white', 'bg' => '#a33b3b'];          // Red
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,7 +104,7 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Executive Dashboard - John Hay Hotels</title>
     
-    <meta http-equiv="refresh" content="300"> 
+    <meta http-equiv="refresh" content="60"> 
     <link rel="icon" type="image/x-icon" href="../img/icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -260,7 +307,7 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
 
         .dashboard-grid { 
             display: grid; 
-            grid-template-columns: 2fr 1fr; 
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); 
             gap: 2rem; 
             flex-grow: 1;
         }
@@ -278,6 +325,45 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
             font-size: 1.6rem; 
             color: var(--jh-primary); 
             margin-top: 0; 
+        }
+
+        /* Updated Score Styling */
+        .score-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #f9f9f9;
+        }
+
+        .score-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--jh-text-brown);
+        }
+
+        .score-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .score-value {
+            font-family: var(--font-header);
+            font-weight: 800;
+            font-size: 1rem;
+            color: var(--jh-primary);
+        }
+
+        .score-badge {
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            min-width: 80px;
+            text-align: center;
         }
         
         .feed-item { 
@@ -316,29 +402,6 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
         .bg-gold { background: var(--jh-accent-gold); }
         .bg-green { background: var(--jh-primary); }
 
-        .health-item { margin-bottom: 1.5rem; }
-        .health-label { 
-            display: flex; 
-            justify-content: space-between; 
-            font-family: var(--font-header);
-            font-size: 0.85rem; 
-            font-weight: 700; 
-            margin-bottom: 0.5rem; 
-        }
-        
-        .progress-bg { 
-            background: #f0f0f0; 
-            height: 10px; 
-            border-radius: 5px; 
-            overflow: hidden; 
-        }
-        
-        .progress-fill { 
-            background: var(--jh-primary); 
-            height: 100%; 
-            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1); 
-        }
-
         .btn-action {
             display: inline-block; 
             padding: 12px 24px; 
@@ -371,34 +434,18 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
             letter-spacing: 0.5px;
         }
 
-        /* RESPONSIVE BREAKPOINTS */
         @media (max-width: 1024px) {
             #sidebar-wrapper { 
                 position: fixed;
-                left: -320px; /* Hide by default on mobile */
+                left: -320px; 
                 top: 0;
                 height: 100vh;
                 width: 320px !important; 
             }
-            
-            body.mobile-sidebar-active #sidebar-wrapper {
-                transform: translateX(320px);
-            }
-
-            .main-content { 
-                padding: 6rem 1.5rem 2rem; 
-                width: 100%;
-            }
-            
+            body.mobile-sidebar-active #sidebar-wrapper { transform: translateX(320px); }
+            .main-content { padding: 6rem 1.5rem 2rem; width: 100%; }
             .mobile-toggle { display: block; }
             .dashboard-grid { grid-template-columns: 1fr; }
-        }
-
-        @media (max-width: 768px) {
-            header h1 { font-size: 2rem; }
-            .quick-presets { border-right: none; padding-right: 0; margin-bottom: 1rem; width: 100%; }
-            .filter-group { flex-direction: column; align-items: flex-start; }
-            .stat-number { font-size: 3rem; }
         }
     </style>
 </head>
@@ -445,37 +492,91 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
             <div class="stat-card">
                 <h3>Total Responses</h3>
                 <div class="stat-number"><?= number_format($total_feedbacks) ?></div>
-                <div class="stat-label">
-                    <?php 
-                        if(isset($_GET['start_date']) && !empty($_GET['start_date'])) echo "Custom Range";
-                        elseif($range == 'month') echo "Current Month";
-                        elseif($range == 'week') echo "Last 7 Days";
-                        elseif($range == 'today') echo "Today's Total";
-                        else echo "Full Year";
-                    ?>
-                </div>
+                <div class="stat-label">Feedbacks Found</div>
             </div>
             <div class="stat-card">
                 <h3>Global Satisfaction</h3>
                 <div class="stat-number"><?= $avg_rating ?></div>
-                <div class="stat-label">Period Avg / 3.00</div>
+                <div class="stat-label">Period Avg / 10.0</div>
             </div>
             <div class="stat-card">
-                <h3>Recent Activity</h3>
+                <h3>Period Activity</h3>
                 <div class="stat-number"><?= number_format($recent_count) ?></div>
-                <div class="stat-label">Last 7 Days </div>
+                <div class="stat-label">Responses in Period</div>
             </div>
         </div>
 
         <div class="dashboard-grid">
             <div class="panel">
+                <h2>Reception & Rooms</h2>
+                <p style="font-family: var(--font-header); font-size: 0.8rem; color: #888; margin-bottom: 2rem;">Average Score (Max: 3.0)</p>
+                
+                <?php 
+                    $departments = [
+                        'Front Desk' => $dept_health['fd'] ?? 0,
+                        'Reservations' => $dept_health['res'] ?? 0,
+                        'Telephone Operator' => $dept_health['tel'] ?? 0,
+                        'Valet' => $dept_health['val'] ?? 0,
+                        'Housekeeping' => $dept_health['hk'] ?? 0,
+                        'Accommodation' => $dept_health['acc'] ?? 0,
+                        'Safety' => $dept_health['sf'] ?? 0,
+                        'Security' => $dept_health['sec'] ?? 0
+                    ];
+
+                    foreach ($departments as $name => $score):
+                        $status = getRatingStatus($score);
+                ?>
+                <div class="score-item">
+                    <span class="score-name"><?= $name ?></span>
+                    <div class="score-meta">
+                        <span class="score-value"><?= number_format($score, 1) ?></span>
+                        <span class="score-badge" style="background: <?= $status['bg'] ?>; color: <?= $status['color'] ?>;">
+                            <?= $status['label'] ?>
+                        </span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="panel">
+                <h2>Service Quality</h2>
+                <p style="font-family: var(--font-header); font-size: 0.8rem; color: #888; margin-bottom: 2rem;">Average Score (Max: 3.0)</p>
+                
+                <?php 
+                    $categories = [
+                        'Food Quality' => $dept_health['fq'] ?? 0,
+                        'Serving Time' => $dept_health['st'] ?? 0,
+                        'Wait Staff' => $dept_health['ws'] ?? 0,
+                        'Grooming' => $dept_health['gr'] ?? 0,
+                        'Behavior' => $dept_health['bh'] ?? 0,
+                        'Overall Service' => $dept_health['svc'] ?? 0,
+                        'Bar' => $dept_health['bar'] ?? 0,
+                        'Bartender' => $dept_health['bt'] ?? 0
+                    ];
+
+                    foreach ($categories as $name => $score):
+                        $status = getRatingStatus($score);
+                ?>
+                <div class="score-item">
+                    <span class="score-name"><?= $name ?></span>
+                    <div class="score-meta">
+                        <span class="score-value"><?= number_format($score, 1) ?></span>
+                        <span class="score-badge" style="background: <?= $status['bg'] ?>; color: <?= $status['color'] ?>;">
+                            <?= $status['label'] ?>
+                        </span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="panel" style="grid-column: 1 / -1;">
                 <h2>Recent Guest Activity</h2>
-                <div style="margin-top: 1rem;">
+                <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
                     <?php if (empty($recent_feedbacks)): ?>
                         <p style="color: #999; font-style: italic;">No feedback recorded for this period.</p>
                     <?php else: ?>
                         <?php foreach($recent_feedbacks as $row): ?>
-                        <div class="feed-item">
+                        <div class="feed-item" style="border: 1px solid #f0f0f0; padding: 1.5rem; border-radius: 8px;">
                             <div class="feed-info">
                                 <strong><?= htmlspecialchars($row['guest_name'] ?: 'Anonymous Guest') ?></strong>
                                 <span><?= date('M d, Y', strtotime($row['submitted_at'])) ?></span>
@@ -483,39 +584,12 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
                                     "<?= htmlspecialchars(mb_strimwidth($row['other_comments'] ?: 'No comment provided.', 0, 100, "...")) ?>"
                                 </p>
                             </div>
-                            <div class="rating-badge <?= $row['overall_service'] >= 2.5 ? 'bg-green' : 'bg-gold' ?>">
-                                <?= number_format($row['overall_service'], 1) ?>/3
+                            <div class="rating-badge <?= $row['overall_rating'] >= 7.5 ? 'bg-green' : 'bg-gold' ?>">
+                                <?= number_format($row['overall_rating'], 1) ?>/10
                             </div>
                         </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>Department Health</h2>
-                <p style="font-family: var(--font-header); font-size: 0.8rem; color: #888; margin-bottom: 2rem;">Real-time performance averages</p>
-                
-                <?php 
-                    $departments = [
-                        'Front Desk' => $dept_health['fd'] ?? 0,
-                        'Housekeeping' => $dept_health['hk'] ?? 0,
-                        'F&B Service' => $dept_health['fnb'] ?? 0
-                    ];
-
-                    foreach ($departments as $name => $score):
-                        $percent = ($score / 3) * 100;
-                ?>
-                <div class="health-item">
-                    <div class="health-label"><span><?= $name ?></span> <span><?= number_format($percent, 0) ?>%</span></div>
-                    <div class="progress-bg"><div class="progress-fill" style="width: <?= $percent ?>%"></div></div>
-                </div>
-                <?php endforeach; ?>
-
-                <div style="background: var(--jh-bg-beige); padding: 1.5rem; margin-top: 2rem; border-left: 4px solid var(--jh-primary); border-radius: 0 4px 4px 0;">
-                    <p style="font-size: 0.8rem; margin: 0; line-height: 1.6; color: var(--jh-text-brown);">
-                        <strong style="font-family: var(--font-header);">Admin Tip:</strong> Focus on departments below 80% to maintain John Hay Hotels' luxury standards.
-                    </p>
                 </div>
             </div>
         </div>
@@ -526,14 +600,10 @@ $recent_feedbacks = $pdo->query("SELECT guest_name, overall_service, submitted_a
     </div>
 
     <script>
-        function toggleMobileMenu() {
-            document.body.classList.toggle('mobile-sidebar-active');
-        }
-
+        function toggleMobileMenu() { document.body.classList.toggle('mobile-sidebar-active'); }
         window.addEventListener('click', function(e) {
             const sidebar = document.getElementById('sidebar-wrapper');
             const toggleBtn = document.querySelector('.mobile-toggle');
-            
             if (window.innerWidth <= 1024 && document.body.classList.contains('mobile-sidebar-active')) {
                 if (sidebar && !sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
                     document.body.classList.remove('mobile-sidebar-active');

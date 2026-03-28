@@ -6,18 +6,37 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
-    try {
-        $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = ? AND is_active = 1 LIMIT 1");
-        $stmt->execute([$username]);
-        $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($admin && password_verify($password, $admin['password'])) {
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_username'] = $admin['username'];
-            $_SESSION['admin_logged_in'] = true;
-            header("Location: dashboard.php");
-            exit;
-        } else { $error = "Invalid credentials."; }
-    } catch (PDOException $e) { $error = "System error."; }
+    
+    // Updated query to ensure we fetch all necessary columns including 'role'
+    // We use $conn which is defined as a new mysqli() in your db_connect.php
+    $stmt = $conn->prepare("SELECT id, username, password, role, is_active FROM admins WHERE username = ? AND is_active = 1 LIMIT 1");
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $admin = $result->fetch_assoc();
+
+    if ($admin && password_verify($password, $admin['password'])) {
+        // Store essential data in session
+        $_SESSION['admin_id'] = $admin['id'];
+        $_SESSION['admin_username'] = $admin['username'];
+        
+        /**
+         * ROLE MANAGEMENT
+         * Ensure your database 'role' column contains values like 'Super Admin' or 'Admin'
+         */
+        $_SESSION['admin_role'] = $admin['role']; 
+        $_SESSION['admin_logged_in'] = true;
+
+        // Update last login timestamp
+        $updateStmt = $conn->prepare("UPDATE admins SET last_login = NOW() WHERE id = ?");
+        $updateStmt->bind_param("i", $admin['id']);
+        $updateStmt->execute();
+
+        header("Location: dashboard.php");
+        exit;
+    } else { 
+        $error = "Invalid credentials."; 
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -29,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="icon" type="image/x-icon" href="../img/icon.png">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;600;700&display=swap');
+        
         :root {
             --jh-primary: #2d4c31;
             --jh-primary-dark: #1e3522;
@@ -38,7 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --jh-danger: #a94442;
             --jh-text-light: #8c7e6d;
         }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Montserrat', sans-serif;
             background: var(--jh-primary);
@@ -48,9 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             justify-content: center;
             align-items: center;
         }
+
         .login-box {
             background: var(--jh-bg-beige);
-            padding: 3rem 3rem 2rem 3rem; /* Adjusted padding for footer */
+            padding: 3rem 3rem 2rem 3rem;
             width: 100%;
             max-width: 420px;
             box-shadow: 0 30px 60px rgba(0,0,0,0.4);
@@ -58,7 +81,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-top: 8px solid var(--jh-accent-gold);
             position: relative;
         }
-        h2 { font-family: 'Playfair Display', serif; color: var(--jh-primary); margin-bottom: 2rem; font-size: 2.2rem; }
+
+        h2 { 
+            font-family: 'Playfair Display', serif; 
+            color: var(--jh-primary); 
+            margin-bottom: 2rem; 
+            font-size: 2.2rem; 
+        }
+
         input {
             width: 100%;
             padding: 1.1rem;
@@ -66,7 +96,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border: 1px solid var(--jh-border);
             font-family: 'Montserrat', sans-serif;
             font-size: 1rem;
+            outline-color: var(--jh-accent-gold);
         }
+
         .btn-login {
             width: 100%;
             padding: 1.2rem;
@@ -78,12 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 700;
             cursor: pointer;
             transition: 0.3s;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
         }
-        .btn-login:hover { background: var(--jh-primary-dark); }
-        .error-msg { color: var(--jh-danger); font-size: 0.85rem; margin-bottom: 1.5rem; font-weight: 600; }
+
+        .btn-login:hover { 
+            background: var(--jh-primary-dark); 
+        }
+
+        .error-msg { 
+            color: var(--jh-danger); 
+            font-size: 0.85rem; 
+            margin-bottom: 1.5rem; 
+            font-weight: 600; 
+        }
         
-        /* Footer Style */
         .login-footer {
             font-size: 0.65rem;
             color: var(--jh-text-light);
@@ -101,12 +141,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <h2>Admin Login</h2>
         
         <?php if($error): ?>
-            <div class="error-msg"><?= $error ?></div>
+            <div class="error-msg"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
         
         <form method="POST">
             <input type="text" name="username" placeholder="Username" required autofocus>
             <input type="password" name="password" placeholder="Password" required>
+            
             <button type="submit" class="btn-login">Login</button>
         </form>
 

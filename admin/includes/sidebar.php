@@ -69,6 +69,13 @@
         border-right: 5px solid var(--jh-primary);
     }
 
+    .nav-divider {
+        height: 1px;
+        background: var(--jh-border);
+        margin: 1rem 2rem;
+        opacity: 0.5;
+    }
+
     .sidebar-footer { padding: 2.5rem; }
     .btn-logout {
         display: flex;
@@ -84,26 +91,29 @@
         font-size: 0.8rem;
     }
 
-    /* Mobile Fixes */
     @media (max-width: 1024px) {
-        .sidebar {
-            left: calc(-1 * var(--sidebar-width));
-        }
-        
-        body.mobile-sidebar-active .sidebar {
-            left: 0;
-        }
+        .sidebar { left: calc(-1 * var(--sidebar-width)); }
+        body.mobile-sidebar-active .sidebar { left: 0; }
     }
 </style>
 
 <?php
+    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
     $current = basename($_SERVER['PHP_SELF']);
     $is_in_stats = (basename(dirname($_SERVER['PHP_SELF'])) == 'stats');
     
+    /** * Role Check Change: Now allows both 'manager' and 'superadmin'
+     */
+    $user_role = isset($_SESSION['admin_role']) ? strtolower($_SESSION['admin_role']) : '';
+    $has_access = ($user_role === 'manager' || $user_role === 'superadmin');
+
     $logo_path = $is_in_stats ? '../../img/logo.png' : '../img/logo.png';
     $admin_link = $is_in_stats ? '../dashboard.php' : 'dashboard.php';
     $stats_link = $is_in_stats ? 'overall.php' : 'stats/overall.php';
     $records_link = $is_in_stats ? '../view_feedbacks.php' : 'view_feedbacks.php';
+    $manage_users_link = $is_in_stats ? '../manage_users.php' : 'manage_users.php';
+    $logout_link = $is_in_stats ? '../logout.php' : 'logout.php';
 ?>
 
 <aside class="sidebar">
@@ -134,11 +144,21 @@
                     <span class="nav-text">Guest Records</span>
                 </a>
             </li>
+
+            <?php if ($has_access): ?>
+                <div class="nav-divider"></div>
+                <li>
+                    <a href="<?= $manage_users_link ?>" class="<?= ($current === 'manage_users.php' || $current === 'create_user.php') ? 'active' : '' ?>">
+                        <i class="fas fa-user-shield"></i>
+                        <span class="nav-text">Admin Management</span>
+                    </a>
+                </li>
+            <?php endif; ?>
         </ul>
     </nav>
 
     <div class="sidebar-footer">
-        <a href="logout.php" class="btn-logout">
+        <a href="<?= $logout_link ?>" class="btn-logout">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
         </a>

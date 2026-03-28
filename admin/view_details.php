@@ -7,9 +7,12 @@ if (!isset($_GET['id'])) {
     exit();
 }
 
-$stmt = $pdo->prepare("SELECT * FROM guest_feedbacks WHERE id = ?");
-$stmt->execute([$_GET['id']]);
-$g = $stmt->fetch();
+// Fetch record using MySQLi
+$stmt = $conn->prepare("SELECT * FROM guest_feedbacks WHERE id = ?");
+$stmt->bind_param("i", $_GET['id']);
+$stmt->execute();
+$result = $stmt->get_result();
+$g = $result->fetch_assoc();
 
 if (!$g) {
     die("Record not found.");
@@ -32,18 +35,20 @@ function getRatingLabel($score) {
     return ['text' => 'POOR', 'color' => '#a94442'];
 }
 
-$overall_rating = getRatingLabel($g['overall_service']);
+// Experience is based on the 1-3 scale
+$exp_rating = getRatingLabel($g['overall_service']);
+// Score is the 1-10 value
+$overall_score = number_format($g['overall_rating'] ?? 0, 1);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guest Report - <?= htmlspecialchars($g['guest_name']) ?></title>
+    <title>Guest Report - John Hay Hotels <?= htmlspecialchars($g['guest_name']) ?></title>
     <link rel="icon" type="image/x-icon" href="../img/icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Added Kumbh Sans with Bold weights */
         @import url('https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@700;800&family=Playfair+Display:wght@700&family=Montserrat:wght@300;400;600;700&display=swap');
         
         :root { 
@@ -52,7 +57,7 @@ $overall_rating = getRatingLabel($g['overall_service']);
             --jh-bg-beige: #f4eee1; 
             --jh-text-brown: #4a3c31;
             --jh-border: #d1c1ad;
-            --rating-color: <?= $overall_rating['color'] ?>;
+            --rating-color: var(--jh-primary);
             --sidebar-width: 320px;
             --font-bold: 'Kumbh Sans', sans-serif;
         }
@@ -80,7 +85,6 @@ $overall_rating = getRatingLabel($g['overall_service']);
             top: 20px;
             right: 20px;
             z-index: 1100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
 
         .main-content { 
@@ -93,29 +97,25 @@ $overall_rating = getRatingLabel($g['overall_service']);
             flex-direction: column;
         }
 
-        /* Actions Bar */
         .action-bar { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
         .btn { padding: 10px 18px; border-radius: 4px; border: none; font-family: var(--font-bold); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; }
         .btn-print { background: var(--jh-primary); color: white; }
-        .btn-pdf { background: #a94442; color: white; } /* Distinctive PDF Red */
+        .btn-pdf { background: #a94442; color: white; }
         .btn-back { background: white; color: var(--jh-primary); border: 1px solid var(--jh-primary); }
         .btn:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 
-        /* Updated Header with Kumbh Sans BOLD */
         .report-header { border-bottom: 2px solid var(--jh-primary); padding-bottom: 1.5rem; margin-bottom: 3rem; display: flex; justify-content: space-between; align-items: flex-end; }
         h1 { font-family: var(--font-bold); font-weight: 800; font-size: 2.8rem; margin: 0; color: var(--jh-primary); letter-spacing: -1px; }
         .date-stamp { font-family: var(--font-bold); color: var(--jh-accent-gold); font-weight: 700; letter-spacing: 1px; font-size: 0.8rem; margin-top: 5px; }
 
-        .rating-display { text-align: right; border-left: 4px solid var(--rating-color); padding-left: 1.5rem; }
+        .rating-display { text-align: right; border-left: 4px solid var(--jh-accent-gold); padding-left: 1.5rem; }
         .rating-label { font-family: var(--font-bold); font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; color: #888; text-transform: uppercase; }
-        .rating-value { font-family: var(--font-bold); font-size: 2.2rem; font-weight: 800; color: var(--rating-color); margin: 0; }
-        .rating-score { font-family: 'Montserrat'; font-size: 1rem; color: var(--jh-text-brown); font-weight: 400; opacity: 0.7; }
+        .rating-value { font-family: var(--font-bold); font-size: 2.5rem; font-weight: 800; color: var(--jh-primary); margin: 0; }
+        .rating-suffix { font-size: 1rem; color: #888; font-weight: 400; }
 
-        /* Grid Layout */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
         .card { background: white; padding: 2rem; box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-radius: 4px; height: 100%; box-sizing: border-box; }
         
-        /* Card Titles with Kumbh Sans BOLD */
         .card h3 { font-family: var(--font-bold); font-weight: 700; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; color: var(--jh-primary); border-bottom: 1px solid var(--jh-accent-gold); padding-bottom: 0.5rem; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
         
         .avg-number { font-family: var(--font-bold); font-size: 0.8rem; font-weight: 700; background: #f9f6f0; padding: 4px 8px; border-radius: 3px; color: var(--jh-accent-gold); }
@@ -123,12 +123,13 @@ $overall_rating = getRatingLabel($g['overall_service']);
         .label { font-family: var(--font-bold); font-weight: 700; color: #888; text-transform: uppercase; font-size: 0.7rem; }
         .score-num { font-weight: 700; color: var(--jh-primary); }
         
+        .exp-badge { font-weight: 800; padding: 2px 8px; border-radius: 3px; color: white; font-size: 0.75rem; }
+
         .comment-group { margin-top: 1.2rem; }
         .comment-text { background: #fdfaf4; padding: 1rem; border-left: 3px solid var(--jh-accent-gold); font-style: italic; font-size: 0.85rem; line-height: 1.5; margin-top: 5px; }
 
         .footer-grid { margin-top: 2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 
-        /* Updated Footer */
         .dashboard-footer {
             margin-top: 4rem;
             padding-top: 2rem;
@@ -148,7 +149,7 @@ $overall_rating = getRatingLabel($g['overall_service']);
             .grid, .footer-grid { grid-template-columns: 1fr; }
             .main-content { padding: 6rem 1.5rem 2rem 1.5rem; width: 100%; }
             .report-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
-            .rating-display { border-left: none; border-top: 4px solid var(--rating-color); padding-left: 0; padding-top: 1rem; text-align: left; width: 100%; }
+            .rating-display { border-left: none; border-top: 4px solid var(--jh-accent-gold); padding-left: 0; padding-top: 1rem; text-align: left; width: 100%; }
             h1 { font-size: 2rem; }
         }
 
@@ -183,10 +184,9 @@ $overall_rating = getRatingLabel($g['overall_service']);
                 <div class="date-stamp">SUBMITTED: <?= date('F d, Y @ h:i A', strtotime($g['submitted_at'])) ?></div>
             </div>
             <div class="rating-display">
-                <div class="rating-label">Overall Experience</div>
+                <div class="rating-label">Overall Performance Score</div>
                 <div class="rating-value">
-                    <?= $overall_rating['text'] ?> 
-                    <span class="rating-score"><?= number_format($g['overall_service'], 1) ?>/3</span>
+                    <?= $overall_score ?> <span class="rating-suffix">/ 10</span>
                 </div>
             </div>
         </div>
@@ -196,11 +196,21 @@ $overall_rating = getRatingLabel($g['overall_service']);
                 <h3>Guest Profile</h3>
                 <div class="data-row"><span class="label">Name</span><span><?= htmlspecialchars($g['guest_name'] ?: 'Anonymous') ?></span></div>
                 <div class="data-row"><span class="label">Room</span><span><?= htmlspecialchars($g['room_no'] ?: '-') ?></span></div>
-                <div class="data-row"><span class="label">Email</span><span><?= htmlspecialchars($g['email'] ?: '-') ?></span></div>
-                <div class="data-row"><span class="label">Contact</span><span><?= htmlspecialchars($g['contact_no'] ?: '-') ?></span></div>
                 <div class="data-row"><span class="label">Stay Dates</span><span><?= htmlspecialchars($g['date_of_stay'] ?: '-') ?></span></div>
-                <div class="data-row"><span class="label">Purpose</span><span><?= htmlspecialchars($g['purpose_of_stay'] ?: '-') ?></span></div>
-                <div class="data-row"><span class="label">First Time</span><span><?= htmlspecialchars($g['first_stay'] ?: '-') ?></span></div>
+                
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--jh-border);">
+                    <span class="label">Service Experience Audit</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 5px;">
+                        <span class="exp-badge" style="background: <?= $exp_rating['color'] ?>;"><?= $exp_rating['text'] ?></span>
+                        <span class="score-num" style="font-size: 1.1rem;"><?= number_format($g['overall_service'], 1) ?> <small style="font-weight:400; color:#888;">/ 3.0</small></span>
+                    </div>
+                </div>
+
+                <div class="comment-group" style="margin-top: 1.5rem;">
+                    <span class="label">Stay Details</span>
+                    <div class="data-row" style="border:none; padding: 4px 0;"><span style="font-size:0.8rem; color:#666;">Purpose:</span><span style="font-size:0.8rem;"><?= htmlspecialchars($g['purpose_of_stay'] ?: '-') ?></span></div>
+                    <div class="data-row" style="border:none; padding: 4px 0;"><span style="font-size:0.8rem; color:#666;">First Time:</span><span style="font-size:0.8rem;"><?= htmlspecialchars($g['first_stay'] ?: '-') ?></span></div>
+                </div>
             </div>
 
             <div class="card">

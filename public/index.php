@@ -43,7 +43,7 @@
             box-shadow: 0 20px 60px rgba(0,0,0,0.12);
             position: relative;
             z-index: 1;
-            padding-bottom: 2rem;
+            padding-bottom: 1rem;
             animation: fadeIn 0.8s ease-out;
             overflow: hidden; 
         }
@@ -77,7 +77,7 @@
 
         .header { 
             text-align: center; 
-            padding: 4rem 1.5rem 2rem; 
+            padding: 3rem 1.5rem 1rem; 
         }
         
         .header h1 {
@@ -98,7 +98,7 @@
             display: block;
         }
         
-        .divider { height: 1px; width: 100px; background: var(--gold-accent); margin: 25px auto; opacity: 0.6; }
+        .divider { height: 1px; width: 100px; background: var(--gold-accent); margin: 20px auto; opacity: 0.6; }
         
         .intro { 
             font-family: 'Playfair Display', serif; 
@@ -112,8 +112,8 @@
         }
 
         .section { 
-            margin: 1.5rem 3rem; 
-            padding: 2rem; 
+            margin: 0.75rem 3rem; 
+            padding: 1.5rem 2rem; 
             background: #fff; 
             border: 1px solid rgba(197, 160, 89, 0.2); 
             border-radius: 8px;
@@ -122,8 +122,8 @@
         .section h2 {
             font-family: 'Playfair Display', serif;
             color: var(--forest-green);
-            font-size: 1.4rem;
-            margin-bottom: 1.8rem;
+            font-size: 1.3rem;
+            margin-bottom: 1.2rem;
             text-transform: uppercase;
             letter-spacing: 2px;
             display: flex;
@@ -141,10 +141,11 @@
         .rating-table { 
             width: 100%; 
             border-collapse: collapse; 
-            margin-bottom: 1.4rem; 
+            margin-bottom: 1rem; 
+            table-layout: fixed; /* Added to control column widths better */
         }
         .rating-table th { 
-            padding: 15px 8px; 
+            padding: 10px 8px; 
             font-size: 0.7rem; 
             text-transform: uppercase; 
             color: var(--gold-accent); 
@@ -153,21 +154,26 @@
             letter-spacing: 1px;
         }
         .rating-table td { 
-            padding: 15px 6px; 
+            padding: 10px 6px; 
             border-bottom: 1px solid #f0f0f0; 
             text-align: center; 
         }
-        .rating-table td:first-child { 
+        /* Specific widths to pull the rating columns closer together */
+        .rating-table td:first-child, .rating-table th:first-child { 
             text-align: left; 
             font-weight: 600; 
             color: var(--text-dark); 
-            width: 45%; 
-            font-size: 0.9rem; 
+            width: 55%; 
+            font-size: 0.85rem; 
         }
+        .rating-table td:not(:first-child), .rating-table th:not(:first-child) {
+            width: 15%;
+        }
+
         .rating-table input[type="radio"] { 
             accent-color: var(--forest-green); 
-            width: 20px; 
-            height: 20px; 
+            width: 18px; 
+            height: 18px; 
             cursor: pointer; 
         }
 
@@ -178,12 +184,12 @@
         input[type="tel"], 
         select {
             width: 100%; 
-            padding: 12px 14px; 
+            padding: 10px 14px; 
             border: 1px solid #e2e2e2;
             font-family: 'Montserrat', sans-serif; 
             background: var(--input-bg);
-            margin-top: 8px; 
-            margin-bottom: 1.2rem; 
+            margin-top: 6px; 
+            margin-bottom: 0.8rem; 
             border-radius: 8px;
             font-size: 0.9rem;
             color: #444;
@@ -199,7 +205,7 @@
         }
 
         label {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 600;
             color: var(--forest-green);
             text-transform: uppercase;
@@ -222,10 +228,37 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             font-size: 0.75rem;
-            margin: 20px 0 10px;
-            padding-top: 20px;
+            margin: 15px 0 10px;
+            padding-top: 15px;
             border-top: 1px dashed #ddd;
             text-align: center;
+        }
+
+        .nps-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 10px;
+            padding: 5px 0;
+        }
+        .nps-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+        .nps-label {
+            font-size: 0.75rem;
+            margin-bottom: 5px;
+            color: var(--gold-accent);
+            font-weight: 700;
+        }
+        .nps-item input[type="radio"] {
+            accent-color: var(--forest-green);
+            width: 18px; 
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
         }
 
         .submit-btn {
@@ -241,7 +274,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 3rem auto; 
+            margin: 1.5rem auto 2.5rem; 
             width: 90%; 
             max-width: 320px;
             border-radius: 50px;
@@ -254,39 +287,35 @@
             font-family: 'Playfair Display', serif; 
             font-style: italic; 
             color: var(--forest-green); 
-            padding: 2rem 1rem; 
+            padding: 1rem 1rem 0; 
             font-size: 1rem;
         }
 
+        /* RESPONSIVE FIXES */
         @media (max-width: 768px) {
-            body { padding: 10px 5px; }
-            .section { 
-                margin: 1rem 0.5rem; 
-                padding: 1.5rem 1rem; 
-            }
+            body { padding: 15px 8px; }
+            .container { margin: 0; width: 100%; border-radius: 8px; }
+            .section { margin: 0.5rem 0.5rem; padding: 1.25rem 1rem; }
             .header h1 { font-size: 2.8rem; }
             .form-grid { grid-template-columns: 1fr; gap: 0; }
             .full-width { grid-column: span 1; }
-            
+
+            /* Centering labels in responsive mode */
+            label { text-align: center; }
+
+            .rating-table { table-layout: auto; }
             .rating-table thead { display: none; }
-            .rating-table tr {
-                display: block;
-                padding: 1rem 0;
-                border-bottom: 1px solid #eee;
-                text-align: center;
-            }
-            .rating-table td:first-child {
-                text-align: center;
-                width: 100% !important;
-                display: block;
-                margin-bottom: 10px;
-            }
-            .rating-table td:not(:first-child) {
-                display: inline-flex;
-                flex-direction: column;
-                width: 30%;
-                align-items: center;
-            }
+            .rating-table tr { display: block; padding: 1rem 0; border-bottom: 2px solid #f4eee1; }
+            .rating-table td:first-child { text-align: center; width: 100% !important; display: block; margin-bottom: 10px; font-size: 0.95rem; color: var(--forest-green); }
+            .rating-table td:not(:first-child) { display: inline-flex; flex-direction: column; width: 32%; align-items: center; border: none; padding: 0; }
+            .rating-table td:nth-child(2)::before { content: "Poor"; font-size: 0.6rem; text-transform: uppercase; color: var(--gold-accent); margin-bottom: 5px; font-weight: 700; }
+            .rating-table td:nth-child(3)::before { content: "Good"; font-size: 0.6rem; text-transform: uppercase; color: var(--gold-accent); margin-bottom: 5px; font-weight: 700; }
+            .rating-table td:nth-child(4)::before { content: "Excellent"; font-size: 0.6rem; text-transform: uppercase; color: var(--gold-accent); margin-bottom: 5px; font-weight: 700; }
+            .nps-label { font-size: 0.65rem; }
+            .nps-item input[type="radio"] { width: 16px; height: 16px; }
+            
+            /* Center radio buttons group in Your Information */
+            .first-stay-prompt div { justify-content: center !important; }
         }
 
         @keyframes fadeIn {
@@ -315,63 +344,84 @@
             <h2>Front of House</h2>
             <table class="rating-table">
                 <thead>
-                    <tr><th>Category</th><th>Excellent</th><th>Good</th><th>Poor</th></tr>
+                    <tr><th>Category</th><th>Poor</th><th>Good</th><th>Excellent</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Front Desk</td><td><input type="radio" name="frontdesk" value="3" required></td><td><input type="radio" name="frontdesk" value="2"></td><td><input type="radio" name="frontdesk" value="1"></td></tr>
-                    <tr><td>Reservations</td><td><input type="radio" name="reservations" value="3" required></td><td><input type="radio" name="reservations" value="2"></td><td><input type="radio" name="reservations" value="1"></td></tr>
-                    <tr><td>Telephone Operator</td><td><input type="radio" name="telephone_operator" value="3" required></td><td><input type="radio" name="telephone_operator" value="2"></td><td><input type="radio" name="telephone_operator" value="1"></td></tr>
-                    <tr><td>Valet</td><td><input type="radio" name="valet" value="3" required></td><td><input type="radio" name="valet" value="2"></td><td><input type="radio" name="valet" value="1"></td></tr>
-                    <tr><td>Housekeeping</td><td><input type="radio" name="housekeeping" value="3" required></td><td><input type="radio" name="housekeeping" value="2"></td><td><input type="radio" name="housekeeping" value="1"></td></tr>
-                    <tr><td>Accommodation</td><td><input type="radio" name="accommodation" value="3" required></td><td><input type="radio" name="accommodation" value="2"></td><td><input type="radio" name="accommodation" value="1"></td></tr>
-                    <tr><td>Safety</td><td><input type="radio" name="safety" value="3" required></td><td><input type="radio" name="safety" value="2"></td><td><input type="radio" name="safety" value="1"></td></tr>
-                    <tr><td>Security</td><td><input type="radio" name="security" value="3" required></td><td><input type="radio" name="security" value="2"></td><td><input type="radio" name="security" value="1"></td></tr>
-                    <tr><td>Overall Service</td><td><input type="radio" name="overall_service" value="3" required></td><td><input type="radio" name="overall_service" value="2"></td><td><input type="radio" name="overall_service" value="1"></td></tr>
+                    <tr><td>Front Desk</td><td><input type="radio" name="frontdesk" value="1" required></td><td><input type="radio" name="frontdesk" value="2"></td><td><input type="radio" name="frontdesk" value="3"></td></tr>
+                    <tr><td>Reservations</td><td><input type="radio" name="reservations" value="1" required></td><td><input type="radio" name="reservations" value="2"></td><td><input type="radio" name="reservations" value="3"></td></tr>
+                    <tr><td>Telephone Operator</td><td><input type="radio" name="telephone_operator" value="1" required></td><td><input type="radio" name="telephone_operator" value="2"></td><td><input type="radio" name="telephone_operator" value="3"></td></tr>
+                    <tr><td>Valet</td><td><input type="radio" name="valet" value="1" required></td><td><input type="radio" name="valet" value="2"></td><td><input type="radio" name="valet" value="3"></td></tr>
+                    <tr><td>Housekeeping</td><td><input type="radio" name="housekeeping" value="1" required></td><td><input type="radio" name="housekeeping" value="2"></td><td><input type="radio" name="housekeeping" value="3"></td></tr>
+                    <tr><td>Accommodation</td><td><input type="radio" name="accommodation" value="1" required></td><td><input type="radio" name="accommodation" value="2"></td><td><input type="radio" name="accommodation" value="3"></td></tr>
+                    <tr><td>Safety</td><td><input type="radio" name="safety" value="1" required></td><td><input type="radio" name="safety" value="2"></td><td><input type="radio" name="safety" value="3"></td></tr>
+                    <tr><td>Security</td><td><input type="radio" name="security" value="1" required></td><td><input type="radio" name="security" value="2"></td><td><input type="radio" name="security" value="3"></td></tr>
+                    <tr><td>Overall Service</td><td><input type="radio" name="overall_service" value="1" required></td><td><input type="radio" name="overall_service" value="2"></td><td><input type="radio" name="overall_service" value="3"></td></tr>
                 </tbody>
             </table>
             <label>Comments & Suggestions:</label>
-            <textarea name="frontdesk_comments" rows="4" placeholder="Your thoughts..."></textarea>
+            <textarea name="frontdesk_comments" rows="3" placeholder="Your thoughts..."></textarea>
         </div>
 
         <div class="section">
             <h2>Food & Beverage</h2>
             <table class="rating-table">
                 <thead>
-                    <tr><th>Category</th><th>Excellent</th><th>Good</th><th>Poor</th></tr>
+                    <tr><th>Category</th><th>Poor</th><th>Good</th><th>Excellent</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td>Food Quality</td><td><input type="radio" name="food_quality" value="3" required></td><td><input type="radio" name="food_quality" value="2"></td><td><input type="radio" name="food_quality" value="1"></td></tr>
-                    <tr><td>Serving Time</td><td><input type="radio" name="serving_time" value="3" required></td><td><input type="radio" name="serving_time" value="2"></td><td><input type="radio" name="serving_time" value="1"></td></tr>
-                    <tr><td>Wait Staff</td><td><input type="radio" name="wait_staff" value="3" required></td><td><input type="radio" name="wait_staff" value="2"></td><td><input type="radio" name="wait_staff" value="1"></td></tr>
-                    <tr><td>Grooming</td><td><input type="radio" name="grooming" value="3" required></td><td><input type="radio" name="grooming" value="2"></td><td><input type="radio" name="grooming" value="1"></td></tr>
-                    <tr><td>Behavior</td><td><input type="radio" name="behavior" value="3" required></td><td><input type="radio" name="behavior" value="2"></td><td><input type="radio" name="behavior" value="1"></td></tr>
-                    <tr><td>Service</td><td><input type="radio" name="fnb_service" value="3" required></td><td><input type="radio" name="fnb_service" value="2"></td><td><input type="radio" name="fnb_service" value="1"></td></tr>
-                    <tr><td>Bar</td><td><input type="radio" name="bar" value="3" required></td><td><input type="radio" name="bar" value="2"></td><td><input type="radio" name="bar" value="1"></td></tr>
-                    <tr><td>Bartender</td><td><input type="radio" name="bartender" value="3" required></td><td><input type="radio" name="bartender" value="2"></td><td><input type="radio" name="bartender" value="1"></td></tr>
+                    <tr><td>Food Quality</td><td><input type="radio" name="food_quality" value="1" required></td><td><input type="radio" name="food_quality" value="2"></td><td><input type="radio" name="food_quality" value="3"></td></tr>
+                    <tr><td>Serving Time</td><td><input type="radio" name="serving_time" value="1" required></td><td><input type="radio" name="serving_time" value="2"></td><td><input type="radio" name="serving_time" value="3"></td></tr>
+                    <tr><td>Wait Staff</td><td><input type="radio" name="wait_staff" value="1" required></td><td><input type="radio" name="wait_staff" value="2"></td><td><input type="radio" name="wait_staff" value="3"></td></tr>
+                    <tr><td>Grooming</td><td><input type="radio" name="grooming" value="1" required></td><td><input type="radio" name="grooming" value="2"></td><td><input type="radio" name="grooming" value="3"></td></tr>
+                    <tr><td>Behavior</td><td><input type="radio" name="behavior" value="1" required></td><td><input type="radio" name="behavior" value="2"></td><td><input type="radio" name="behavior" value="3"></td></tr>
+                    <tr><td>Service</td><td><input type="radio" name="fnb_service" value="1" required></td><td><input type="radio" name="fnb_service" value="2"></td><td><input type="radio" name="fnb_service" value="3"></td></tr>
+                    <tr><td>Bar</td><td><input type="radio" name="bar" value="1" required></td><td><input type="radio" name="bar" value="2"></td><td><input type="radio" name="bar" value="3"></td></tr>
+                    <tr><td>Bartender</td><td><input type="radio" name="bartender" value="1" required></td><td><input type="radio" name="bartender" value="2"></td><td><input type="radio" name="bartender" value="3"></td></tr>
                 </tbody>
             </table>
             <label>Comments & Suggestions:</label>
-            <textarea name="fnb_comments" rows="4" placeholder="Your thoughts..."></textarea>
+            <textarea name="fnb_comments" rows="3" placeholder="Your thoughts..."></textarea>
 
-            <label style="margin-top:1.2rem;">Especially Helpful Staff:</label>
+            <label style="margin-top:0.8rem;">Especially Helpful Staff:</label>
             <input type="text" name="helpful_staff_names" placeholder="Name/s of staff members">
+        </div>
+
+        <div class="section">
+            <h2>Overall Experience</h2>
+            <label class="required-label">Based on your experience, how satisfied are you with your stay?</label>
+            <div class="nps-container">
+                <div class="nps-item"><span class="nps-label">1</span><input type="radio" name="overall_rating" value="1" required></div>
+                <div class="nps-item"><span class="nps-label">2</span><input type="radio" name="overall_rating" value="2"></div>
+                <div class="nps-item"><span class="nps-label">3</span><input type="radio" name="overall_rating" value="3"></div>
+                <div class="nps-item"><span class="nps-label">4</span><input type="radio" name="overall_rating" value="4"></div>
+                <div class="nps-item"><span class="nps-label">5</span><input type="radio" name="overall_rating" value="5"></div>
+                <div class="nps-item"><span class="nps-label">6</span><input type="radio" name="overall_rating" value="6"></div>
+                <div class="nps-item"><span class="nps-label">7</span><input type="radio" name="overall_rating" value="7"></div>
+                <div class="nps-item"><span class="nps-label">8</span><input type="radio" name="overall_rating" value="8"></div>
+                <div class="nps-item"><span class="nps-label">9</span><input type="radio" name="overall_rating" value="9"></div>
+                <div class="nps-item"><span class="nps-label">10</span><input type="radio" name="overall_rating" value="10"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #888; margin-top: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                <span>Not Satisfied</span>
+                <span>Highly Satisfied</span>
+            </div>
         </div>
 
         <div class="section">
             <h2>Additional Comments</h2>
             <label>Suggestions for the future:</label>
-            <textarea name="suggestions_future" rows="4" placeholder="How can we make your next visit even better?"></textarea>
+            <textarea name="suggestions_future" rows="3" placeholder="How can we make your next visit even better?"></textarea>
 
-            <label style="margin-top:1.2rem;">Other Comments:</label>
-            <textarea name="other_comments" rows="4" placeholder="Any additional thoughts..."></textarea>
+            <label style="margin-top:0.8rem;">Other Comments:</label>
+            <textarea name="other_comments" rows="3" placeholder="Any additional thoughts..."></textarea>
         </div>
 
         <div class="section">
             <h2>Your Information</h2>
 
-            <div class="first-stay-prompt" style="margin-bottom: 20px;">
+            <div class="first-stay-prompt" style="margin-bottom: 15px;">
                 <label class="required-label">Was this your first stay at John Hay Hotels?</label>
-                <div style="display: flex; gap: 2rem; margin-top: 10px; justify-content: flex-start;">
+                <div style="display: flex; gap: 2rem; margin-top: 5px; justify-content: flex-start;">
                     <label style="text-transform:none; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="radio" name="first_stay" value="Yes" required> Yes</label>
                     <label style="text-transform:none; font-weight:400; display:flex; align-items:center; gap:8px;"><input type="radio" name="first_stay" value="No" required> No</label>
                 </div>
@@ -402,7 +452,7 @@
                 </div>
                 <div>
                     <label>Email:</label>
-                    <input type="email" name="email" placeholder="your.email@example.com">
+                    <input type="text" name="email" placeholder="your.email@example.com">
                 </div>
                 <div class="full-width">
                     <label>Address:</label>
@@ -418,14 +468,14 @@
                 </div>
 
                 <div class="full-width">
-                    <label class="required-label" style="margin-bottom: 10px;">Date/s of stay:</label>
+                    <label class="required-label" style="margin-bottom: 5px;">Date/s of stay:</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div>
-                            <span style="font-size: 0.75rem; color: var(--gold-accent); font-weight:700; display:block;">Check-in</span>
+                            <span style="font-size: 0.7rem; color: var(--gold-accent); font-weight:700; display:block;">Check-in</span>
                             <input type="date" name="check_in" id="check_in" onchange="setMinCheckout()" required>
                         </div>
                         <div>
-                            <span style="font-size: 0.75rem; color: var(--gold-accent); font-weight:700; display:block;">Check-out</span>
+                            <span style="font-size: 0.7rem; color: var(--gold-accent); font-weight:700; display:block;">Check-out</span>
                             <input type="date" name="check_out" id="check_out" required>
                         </div>
                     </div>

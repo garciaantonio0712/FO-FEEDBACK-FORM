@@ -8,6 +8,7 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 // 2. Build the SQL Query
 $search_sql = "";
 $params = [];
+$types = "";
 
 if ($search !== '') {
     $search_sql = " WHERE (guest_name LIKE ? 
@@ -17,6 +18,7 @@ if ($search !== '') {
     
     $search_param = "%$search%";
     $params = [$search_param, $search_param, $search_param, $search_param];
+    $types = "ssss"; // string types for the first 4 params
 
     $s_lower = strtolower($search);
     if ($s_lower === 'excellent') {
@@ -32,6 +34,7 @@ if ($search !== '') {
         $params[] = $search_param;
         $params[] = $search_param;
         $params[] = $search_param;
+        $types .= "sss"; // add 3 more strings
     }
     $search_sql .= ")";
 }
@@ -42,23 +45,45 @@ $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $limit;
 
-// 5. Get Total Count for Pagination
-$count_query = "SELECT COUNT(*) FROM guest_feedbacks" . $search_sql;
-$total_stmt = $pdo->prepare($count_query);
-$total_stmt->execute($params);
-$total_records = $total_stmt->fetchColumn();
+// 5. Get Total Count for Pagination (MySQLi version)
+$count_query = "SELECT COUNT(*) as total FROM guest_feedbacks" . $search_sql;
+$total_stmt = $conn->prepare($count_query);
+if ($search !== '') {
+    $total_stmt->bind_param($types, ...$params);
+}
+$total_stmt->execute();
+$total_result = $total_stmt->get_result();
+$total_row = $total_result->fetch_assoc();
+$total_records = $total_row['total'];
 $total_pages = ceil($total_records / $limit);
 
 // 6. Fetch Feedbacks for Screen
-$fetch_query = "SELECT * FROM guest_feedbacks" . $search_sql . " ORDER BY submitted_at DESC LIMIT $limit OFFSET $offset";
-$stmt = $pdo->prepare($fetch_query);
-$stmt->execute($params);
-$feedbacks = $stmt->fetchAll();
+$fetch_query = "SELECT * FROM guest_feedbacks" . $search_sql . " ORDER BY submitted_at DESC LIMIT ? OFFSET ?";
+$fetch_stmt = $conn->prepare($fetch_query);
+
+if ($search !== '') {
+    // Append pagination types
+    $types_paginated = $types . "ii";
+    $params_paginated = array_merge($params, [$limit, $offset]);
+    $fetch_stmt->bind_param($types_paginated, ...$params_paginated);
+} else {
+    $fetch_stmt->bind_param("ii", $limit, $offset);
+}
+
+$fetch_stmt->execute();
+$feedbacks_result = $fetch_stmt->get_result();
+$feedbacks = $feedbacks_result->fetch_all(MYSQLI_ASSOC);
 
 // 7. Fetch ALL matching records for the JS Print/PDF Function
-$all_stmt = $pdo->prepare("SELECT * FROM guest_feedbacks" . $search_sql . " ORDER BY submitted_at DESC");
-$all_stmt->execute($params);
-$all_feedbacks_json = json_encode($all_stmt->fetchAll(PDO::FETCH_ASSOC));
+$all_query = "SELECT * FROM guest_feedbacks" . $search_sql . " ORDER BY submitted_at DESC";
+$all_stmt = $conn->prepare($all_query);
+if ($search !== '') {
+    $all_stmt->bind_param($types, ...$params);
+}
+$all_stmt->execute();
+$all_result = $all_stmt->get_result();
+$all_records = $all_result->fetch_all(MYSQLI_ASSOC);
+$all_feedbacks_json = json_encode($all_records);
 
 function getRatingLabel($score) {
     if ($score >= 2.5) return ['text' => 'Excellent', 'class' => 'bg-green'];
@@ -75,7 +100,6 @@ function getRatingLabel($score) {
     <link rel="icon" type="image/x-icon" href="../img/icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Added Kumbh Sans for Bold Headers */
         @import url('https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@700;800&family=Playfair+Display:wght@700&family=Montserrat:wght@400;600;700&display=swap');
         
         :root {
@@ -134,7 +158,6 @@ function getRatingLabel($score) {
             z-index: 1100;
         }
 
-        /* Titles using Kumbh Sans BOLD */
         header h1 { 
             font-family: var(--font-bold); 
             font-weight: 800; 
@@ -153,7 +176,6 @@ function getRatingLabel($score) {
             margin-bottom: 2rem; 
         }
 
-        /* Tools Bar */
         .tools-bar { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem; gap: 15px; flex-wrap: wrap; }
         .action-group { display: flex; gap: 10px; }
         .btn-tool { 
@@ -167,7 +189,6 @@ function getRatingLabel($score) {
         .btn-pdf-export { background: #a94442; color: white; border-color: #a94442; }
         .btn-pdf-export:hover { background: #8e3a38; color: white; }
 
-        /* Dropdown Menu */
         .dropdown { position: relative; display: inline-block; }
         .dropdown-content {
             display: none; position: absolute; right: 0; background-color: white;
@@ -196,6 +217,8 @@ function getRatingLabel($score) {
         .bg-gold { background: var(--jh-accent-gold); }
         .bg-red { background: #a94442; }
 
+        .overall-score { font-family: var(--font-bold); font-weight: 800; color: var(--jh-primary); font-size: 1.1rem; }
+
         .btn-view {
             text-decoration: none; background: var(--jh-primary); color: white; padding: 8px 15px;
             font-family: var(--font-bold); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border-radius: 3px; transition: 0.3s;
@@ -203,7 +226,6 @@ function getRatingLabel($score) {
         }
         .btn-view:hover { background: var(--jh-accent-gold); }
 
-        /* Search Layout */
         .search-form { display: flex; gap: 10px; flex-grow: 1; max-width: 600px; }
         .search-wrapper { position: relative; flex-grow: 1; display: flex; align-items: center; }
         .search-box { 
@@ -220,7 +242,6 @@ function getRatingLabel($score) {
         .page-link { text-decoration: none; padding: 8px 16px; border: 1px solid var(--jh-border); color: var(--jh-primary); background: white; border-radius: 4px; font-weight: 600; }
         .page-link.active { background: var(--jh-primary); color: white; border-color: var(--jh-primary); }
 
-        /* Footer Corrected */
         .dashboard-footer {
             margin-top: 3rem;
             padding-top: 1.5rem;
@@ -310,7 +331,7 @@ function getRatingLabel($score) {
                         <th>Guest</th>
                         <th>Room</th>
                         <th>Experience</th>
-                        <th>Performance</th>
+                        <th>Overall Rating</th>
                         <th class="btn-view-col">Action</th>
                     </tr>
                 </thead>
@@ -320,8 +341,6 @@ function getRatingLabel($score) {
                     <?php endif; ?>
 
                     <?php foreach($feedbacks as $row): 
-                        $fo_avg = ($row['frontdesk'] + $row['reservations'] + $row['telephone_operator'] + $row['valet']) / 4;
-                        $fnb_avg = ($row['food_quality'] + $row['serving_time'] + $row['wait_staff'] + $row['bar']) / 4;
                         $rating = getRatingLabel($row['overall_service']);
                     ?>
                     <tr>
@@ -332,8 +351,8 @@ function getRatingLabel($score) {
                         </td>
                         <td data-label="Room"><?= htmlspecialchars($row['room_no'] ?: '-') ?></td>
                         <td data-label="Experience"><span class="rating-badge <?= $rating['class'] ?>"><?= $rating['text'] ?></span></td>
-                        <td data-label="Performance" style="font-size: 0.75rem; color: #555;">
-                            FO: <?= number_format($fo_avg, 2) ?> | F&B: <?= number_format($fnb_avg, 2) ?>
+                        <td data-label="Overall Rating" class="overall-score">
+                            <?= number_format($row['overall_rating'] ?? 0, 1) ?>
                         </td>
                         <td class="btn-view-col"><a href="view_details.php?id=<?= $row['id'] ?>" class="btn-view">View Details</a></td>
                     </tr>
@@ -384,7 +403,6 @@ function getRatingLabel($score) {
             clearBtn.style.display = this.value.length > 0 ? 'block' : 'none';
         });
 
-        // PDF / PRINT DATA LOGIC
         const allData = <?= $all_feedbacks_json ?>;
 
         function promptCustomPrint() {
@@ -402,23 +420,20 @@ function getRatingLabel($score) {
             let html = `
             <html>
             <head>
-                <title>Guest Feedback PDF Report</title>
+                <title>Guest Feedback Report</title>
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@700&family=Montserrat:wght@400;700&display=swap');
-                    @page { size: landscape; margin: 1cm; }
+                    @page { size: portrait; margin: 1cm; }
                     body { font-family: 'Montserrat', sans-serif; padding: 20px; color: #4a3c31; }
                     .header { display: flex; align-items: center; border-bottom: 3px solid #2d4c31; padding-bottom: 15px; margin-bottom: 20px; }
-                    .logo { height: 60px; margin-right: 20px; }
                     h1 { font-family: 'Kumbh Sans', sans-serif; color: #2d4c31; margin: 0; font-size: 22px; }
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th { text-align: left; background: #f9f6f0 !important; padding: 10px; border-bottom: 2px solid #d1c1ad; font-size: 10px; text-transform: uppercase; -webkit-print-color-adjust: exact; }
-                    td { padding: 8px; border-bottom: 1px solid #eee; font-size: 10px; }
-                    .rating { font-weight: bold; }
+                    th { text-align: left; background: #f9f6f0 !important; padding: 10px; border-bottom: 2px solid #d1c1ad; font-size: 11px; text-transform: uppercase; -webkit-print-color-adjust: exact; }
+                    td { padding: 10px; border-bottom: 1px solid #eee; font-size: 11px; }
                 </style>
             </head>
             <body>
                 <div class="header">
-                    <img src="../img/logo.png" class="logo" onerror="this.style.display='none'">
                     <div>
                         <h1>Guest Feedback Audit Report</h1>
                         <small>Generated on: ${new Date().toLocaleDateString()}</small>
@@ -430,26 +445,23 @@ function getRatingLabel($score) {
                             <th>Date</th>
                             <th>Guest Name</th>
                             <th>Room</th>
-                            <th>Overall Rating</th>
-                            <th>FO Avg</th>
-                            <th>F&B Avg</th>
+                            <th>Experience</th>
+                            <th>Overall Score</th>
                         </tr>
                     </thead>
                     <tbody>`;
 
             printData.forEach(row => {
-                const fo = ((parseFloat(row.frontdesk) + parseFloat(row.reservations) + parseFloat(row.telephone_operator) + parseFloat(row.valet)) / 4).toFixed(2);
-                const fnb = ((parseFloat(row.food_quality) + parseFloat(row.serving_time) + parseFloat(row.wait_staff) + parseFloat(row.bar)) / 4).toFixed(2);
                 const ratingText = row.overall_service >= 2.5 ? 'EXCELLENT' : (row.overall_service >= 1.6 ? 'GOOD' : 'POOR');
+                const score = row.overall_rating ? parseFloat(row.overall_rating).toFixed(1) : '0.0';
 
                 html += `
                     <tr>
                         <td>${row.submitted_at.split(' ')[0]}</td>
                         <td><b>${row.guest_name || 'N/A'}</b></td>
                         <td>${row.room_no || '-'}</td>
-                        <td class="rating">${ratingText} (${row.overall_service})</td>
-                        <td>${fo}</td>
-                        <td>${fnb}</td>
+                        <td>${ratingText}</td>
+                        <td><b>${score}</b></td>
                     </tr>`;
             });
 

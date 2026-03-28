@@ -31,29 +31,89 @@ if (empty($start_date) || empty($end_date)) {
     }
 }
 
-// 2. Fetch Departmental Averages
-$dept_query = "SELECT AVG(frontdesk) as fd, AVG(housekeeping) as hk, AVG(accommodation) as acc, AVG(overall_service) as ov, AVG(fnb_service) as fnb FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?";
-$stmt_dept = $pdo->prepare($dept_query);
-$stmt_dept->execute([$start_date, $end_date]);
-$dept_stats = $stmt_dept->fetch(PDO::FETCH_ASSOC);
+// 2. Fetch Overall Satisfaction Trend (MySQLi version)
+$overall_trend_query = "SELECT DATE(submitted_at) as date, AVG(overall_rating) as avg_rating 
+                        FROM guest_feedbacks 
+                        WHERE DATE(submitted_at) BETWEEN ? AND ? 
+                        GROUP BY DATE(submitted_at) 
+                        ORDER BY DATE(submitted_at) ASC";
+$stmt_trend = $conn->prepare($overall_trend_query);
+$stmt_trend->bind_param("ss", $start_date, $end_date);
+$stmt_trend->execute();
+$trend_results = $stmt_trend->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// 3. Fetch F&B Detail Averages
-$fnb_detail_query = "SELECT AVG(food_quality) as fq, AVG(serving_time) as st, AVG(wait_staff) as ws, AVG(bar) as bar FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?";
-$stmt_fnb = $pdo->prepare($fnb_detail_query);
-$stmt_fnb->execute([$start_date, $end_date]);
-$fnb_details = $stmt_fnb->fetch(PDO::FETCH_ASSOC);
+$trend_labels = [];
+$trend_values = [];
+if (count($trend_results) > 0) {
+    foreach ($trend_results as $row) {
+        $trend_labels[] = date('M d', strtotime($row['date']));
+        $trend_values[] = round($row['avg_rating'], 2);
+    }
+    $total_avg = array_sum($trend_values) / count($trend_values);
+} else {
+    $total_avg = 0;
+}
 
-// 4. Fetch First Stay Distribution
+// Logic for Badge Color
+$badge_class = 'badge-good';
+$status_text = 'Good';
+if ($total_avg >= 9) { $badge_class = 'badge-excellent'; $status_text = 'Excellent'; }
+elseif ($total_avg < 7) { $badge_class = 'badge-needs-improvement'; $status_text = 'Needs Work'; }
+
+// 3. Fetch Detailed Front of House Stats
+$foh_query = "SELECT 
+    AVG(frontdesk) as fd, 
+    AVG(reservations) as res, 
+    AVG(telephone_operator) as tel, 
+    AVG(valet) as val, 
+    AVG(housekeeping) as hk, 
+    AVG(accommodation) as acc, 
+    AVG(safety) as sft, 
+    AVG(security) as sec, 
+    AVG(overall_service) as ov 
+    FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?";
+$stmt_foh = $conn->prepare($foh_query);
+$stmt_foh->bind_param("ss", $start_date, $end_date);
+$stmt_foh->execute();
+$foh_stats = $stmt_foh->get_result()->fetch_assoc();
+
+// 4. Fetch Detailed F&B Stats
+$fnb_query = "SELECT 
+    AVG(food_quality) as fq, 
+    AVG(serving_time) as st, 
+    AVG(wait_staff) as ws, 
+    AVG(grooming) as gro, 
+    AVG(behavior) as beh, 
+    AVG(fnb_service) as ser, 
+    AVG(bar) as br, 
+    AVG(bartender) as bt 
+    FROM guest_feedbacks WHERE DATE(submitted_at) BETWEEN ? AND ?";
+$stmt_fnb = $conn->prepare($fnb_query);
+$stmt_fnb->bind_param("ss", $start_date, $end_date);
+$stmt_fnb->execute();
+$fnb_stats = $stmt_fnb->get_result()->fetch_assoc();
+
+// 5. Fetch First Stay Distribution
 $first_stay_query = "SELECT first_stay, COUNT(*) as count FROM guest_feedbacks WHERE first_stay IS NOT NULL AND DATE(submitted_at) BETWEEN ? AND ? GROUP BY first_stay";
-$stmt_stay = $pdo->prepare($first_stay_query);
-$stmt_stay->execute([$start_date, $end_date]);
-$first_stay_data = $stmt_stay->fetchAll(PDO::FETCH_KEY_PAIR);
+$stmt_stay = $conn->prepare($first_stay_query);
+$stmt_stay->bind_param("ss", $start_date, $end_date);
+$stmt_stay->execute();
+$stay_res = $stmt_stay->get_result();
+$first_stay_data = [];
+while($row = $stay_res->fetch_assoc()) {
+    $first_stay_data[$row['first_stay']] = $row['count'];
+}
 
-// 5. Fetch Purpose of Stay Distribution
+// 6. Fetch Purpose of Stay Distribution
 $purpose_query = "SELECT purpose_of_stay, COUNT(*) as count FROM guest_feedbacks WHERE purpose_of_stay IS NOT NULL AND DATE(submitted_at) BETWEEN ? AND ? GROUP BY purpose_of_stay";
-$stmt_purpose = $pdo->prepare($purpose_query);
-$stmt_purpose->execute([$start_date, $end_date]);
-$purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
+$stmt_purpose = $conn->prepare($purpose_query);
+$stmt_purpose->bind_param("ss", $start_date, $end_date);
+$stmt_purpose->execute();
+$purp_res = $stmt_purpose->get_result();
+$purpose_data = [];
+while($row = $purp_res->fetch_assoc()) {
+    $purpose_data[$row['purpose_of_stay']] = $row['count'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -66,7 +126,6 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Import Kumbh Sans with multiple weights */
         @import url('https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@700;800;900&family=Montserrat:wght@400;600;700&display=swap');
         
         :root {
@@ -78,6 +137,9 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             --jh-border: #d1c1ad;
             --sidebar-width: 320px;
             --sidebar-collapsed-width: 80px;
+            --success-green: #27ae60;
+            --warning-orange: #e67e22;
+            --danger-red: #c0392b;
         }
 
         * { box-sizing: border-box; }
@@ -92,7 +154,6 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             overflow-x: hidden;
         }
 
-        /* Sidebar Logic */
         #sidebar-wrapper {
             width: var(--sidebar-width);
             flex-shrink: 0;
@@ -105,21 +166,16 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             border-right: 1px solid var(--jh-border);
         }
 
-        body.sidebar-hidden #sidebar-wrapper {
-            width: var(--sidebar-collapsed-width);
-        }
-
         .main-content { 
             flex: 1;
             padding: 1.5rem 2rem; 
             transition: all 0.3s ease;
-            min-width: 0; /* Prevents flex items from overflowing */
+            min-width: 0;
             width: 100%;
             display: flex;
             flex-direction: column;
         }
 
-        /* Hamburger Styles */
         .mobile-toggle {
             display: none;
             background: var(--jh-primary);
@@ -133,12 +189,9 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             top: 20px;
             right: 20px;
             z-index: 1100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
 
         header { margin-bottom: 1.5rem; }
-        
-        /* Ultra Bold Main Title */
         header h1 { 
             font-family: 'Kumbh Sans', sans-serif; 
             font-weight: 900; 
@@ -146,7 +199,6 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             font-size: clamp(1.8rem, 5vw, 2.8rem); 
             margin: 0; 
             letter-spacing: -1px;
-            text-shadow: 0.5px 0.5px 0px rgba(0,0,0,0.1);
         }
 
         .subtitle { 
@@ -159,46 +211,70 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             margin-bottom: 2px; 
         }
 
-        /* Filter Section */
         .filter-section { background: white; padding: 1rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 10px rgba(0,0,0,0.03); border-radius: 8px; }
         .filter-group { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
         .quick-presets { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-        .btn-preset { text-decoration: none; padding: 6px 12px; font-size: 0.7rem; font-weight: 700; color: var(--jh-text-brown); border: 1px solid var(--jh-border); border-radius: 20px; transition: 0.3s; white-space: nowrap; }
+        .btn-preset { text-decoration: none; padding: 6px 12px; font-size: 0.7rem; font-weight: 700; color: var(--jh-text-brown); border: 1px solid var(--jh-border); border-radius: 20px; transition: 0.3s; }
         .btn-preset.active { background: var(--jh-primary); color: white; border-color: var(--jh-primary); }
-        
-        .custom-range { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .custom-range input { border: 1px solid var(--jh-border); padding: 6px 10px; font-family: 'Montserrat'; font-weight: 600; border-radius: 4px; font-size: 0.8rem; flex: 1; min-width: 130px; }
-        .btn-filter { background: var(--jh-primary); color: white; border: none; padding: 7px 15px; font-weight: 800; cursor: pointer; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase; }
+        .custom-range { display: flex; align-items: center; gap: 0.5rem; }
+        .custom-range input { border: 1px solid var(--jh-border); padding: 6px 10px; font-family: 'Montserrat'; border-radius: 4px; font-size: 0.8rem; }
+        .btn-filter { background: var(--jh-primary); color: white; border: none; padding: 7px 15px; font-weight: 800; cursor: pointer; border-radius: 4px; font-size: 0.8rem; }
 
-        /* Grid and Charts */
         .stats-grid { 
             display: grid; 
             grid-template-columns: repeat(2, 1fr); 
             gap: 1.2rem; 
-            width: 100%;
-            max-width: 100%; 
-            flex-grow: 1;
         }
-        .chart-card { background: var(--jh-card-white); padding: 1.2rem; box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-top: 5px solid var(--jh-accent-gold); border-radius: 4px; min-width: 0; }
+
+        .chart-card { background: var(--jh-card-white); padding: 1.2rem; box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-radius: 8px; position: relative; }
         .chart-card.full-width { grid-column: span 2; }
         
         .chart-card h3 { 
             font-family: 'Kumbh Sans', sans-serif;
             font-weight: 800;
-            font-size: 1rem; 
+            font-size: 0.9rem; 
             text-transform: uppercase; 
             letter-spacing: 1.5px; 
             margin-bottom: 1.2rem; 
-            color: var(--jh-primary); 
-            border-bottom: 2px solid #f0f0f0; 
-            padding-bottom: 0.8rem; 
+            color: #8e8379;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        
-        .chart-container { 
-            position: relative; 
-            height: 250px; 
-            width: 100%; 
+
+        .chart-card h3 i { color: var(--jh-accent-gold); }
+
+        .satisfaction-score-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
         }
+
+        .score-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .score-value { font-size: 1.8rem; font-weight: 900; line-height: 1; }
+        .score-label { font-size: 0.6rem; text-transform: uppercase; font-weight: 700; }
+
+        .badge-excellent { background: var(--success-green); }
+        .badge-good { background: var(--jh-accent-gold); }
+        .badge-needs-improvement { background: var(--danger-red); }
+
+        .score-info h2 { margin: 0; font-family: 'Kumbh Sans'; color: var(--jh-primary); }
+        .score-info p { margin: 0; font-size: 0.85rem; font-weight: 600; opacity: 0.7; }
+
+        .chart-container { position: relative; height: 320px; width: 100%; }
+        .chart-container.large { height: 420px; }
 
         .dashboard-footer {
             margin-top: 3rem;
@@ -208,37 +284,29 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
             color: #8e8379;
             font-size: 0.75rem;
             font-weight: 700;
-            letter-spacing: 0.5px;
         }
 
-        /* Tablet/Mobile Breakpoints */
         @media (max-width: 1024px) {
             #sidebar-wrapper { 
                 position: fixed;
-                left: -320px;
+                left: -100%; 
+                top: 0;
                 height: 100vh;
-                width: 280px;
+                display: block; 
+                z-index: 2000;
             }
-            body.mobile-sidebar-active #sidebar-wrapper { left: 0; }
+            body.mobile-sidebar-active #sidebar-wrapper {
+                left: 0;
+            }
             .main-content { padding: 5rem 1rem 1.5rem; }
             .mobile-toggle { display: block; }
             .stats-grid { grid-template-columns: 1fr; }
             .chart-card.full-width { grid-column: span 1; }
-            .filter-group { flex-direction: column; align-items: stretch; }
-            .quick-presets { justify-content: center; }
-            .custom-range { justify-content: center; }
-        }
-
-        @media (max-width: 480px) {
-            .chart-container { height: 200px; } 
-            .btn-preset { padding: 6px 8px; font-size: 0.6rem; }
-            .custom-range input { font-size: 0.75rem; width: 100%; }
-            .btn-filter { width: 100%; margin-top: 5px; }
         }
     </style>
 </head>
 <body>
-    <button class="mobile-toggle" onclick="toggleMobileMenu()" aria-label="Toggle Menu">
+    <button class="mobile-toggle" onclick="toggleMobileMenu()">
         <i class="fas fa-bars"></i>
     </button>
 
@@ -248,7 +316,7 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
 
     <div class="main-content">
         <header>
-            <p class="subtitle">Analytical Insights</p>
+            <p class="subtitle">Experience Metrics</p>
             <h1>Overall Statistics</h1>
         </header>
 
@@ -270,19 +338,38 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
 
         <div class="stats-grid">
             <div class="chart-card full-width">
-                <h3>Departmental Performance (Scale 1-3)</h3>
-                <div class="chart-container"><canvas id="deptChart"></canvas></div>
+                <div class="satisfaction-score-container">
+                    <div class="score-circle <?= $badge_class ?>">
+                        <span class="score-value"><?= number_format($total_avg, 1) ?></span>
+                        <span class="score-label">Avg Rating</span>
+                    </div>
+                    <div class="score-info">
+                        <h2>Overall Satisfaction Trend</h2>
+                        <p>Currently performing at <span style="color: <?= ($total_avg >= 9) ? 'var(--success-green)' : 'var(--jh-accent-gold)' ?>"><?= $status_text ?></span> levels.</p>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="overallTrendChart"></canvas>
+                </div>
             </div>
+
             <div class="chart-card">
-                <h3>F&B Service Quality</h3>
-                <div class="chart-container"><canvas id="fnbRadarChart"></canvas></div>
+                <h3><i class="fas fa-concierge-bell"></i> Front of House Performance</h3>
+                <div class="chart-container large"><canvas id="fohChart"></canvas></div>
             </div>
+
             <div class="chart-card">
-                <h3>Guest Retention</h3>
+                <h3><i class="fas fa-utensils"></i> Food & Beverage Performance</h3>
+                <div class="chart-container large"><canvas id="fnbChart"></canvas></div>
+            </div>
+
+            <div class="chart-card">
+                <h3><i class="fas fa-users"></i> Guest Retention</h3>
                 <div class="chart-container"><canvas id="stayDoughnut"></canvas></div>
             </div>
-            <div class="chart-card full-width">
-                <h3>Purpose of Stay Analysis</h3>
+
+            <div class="chart-card">
+                <h3><i class="fas fa-briefcase"></i> Purpose of Stay</h3>
                 <div class="chart-container"><canvas id="purposeChart"></canvas></div>
             </div>
         </div>
@@ -293,152 +380,138 @@ $purpose_data = $stmt_purpose->fetchAll(PDO::FETCH_KEY_PAIR);
     </div>
 
     <script>
-        function toggleSidebar() {
-            document.body.classList.toggle('sidebar-hidden');
-            const icon = document.getElementById('toggle-icon');
-            if(icon) {
-                if(document.body.classList.contains('sidebar-hidden')) {
-                    icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
-                } else {
-                    icon.classList.replace('fa-chevron-right', 'fa-chevron-left');
-                }
-            }
-        }
-
         function toggleMobileMenu() {
             document.body.classList.toggle('mobile-sidebar-active');
         }
 
-        window.addEventListener('click', function(e) {
-            const sidebarWrapper = document.getElementById('sidebar-wrapper');
-            const toggleBtn = document.querySelector('.mobile-toggle');
-            if (window.innerWidth <= 1024 && document.body.classList.contains('mobile-sidebar-active')) {
-                if (!sidebarWrapper.contains(e.target) && !toggleBtn.contains(e.target)) {
-                    document.body.classList.remove('mobile-sidebar-active');
+        Chart.defaults.font.family = "'Montserrat', sans-serif";
+        Chart.defaults.color = '#4a3c31';
+        Chart.defaults.font.weight = '600';
+
+        // 1. Overall Trend
+        const ctxTrend = document.getElementById('overallTrendChart').getContext('2d');
+        const gradient = ctxTrend.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(45, 76, 49, 0.4)');
+        gradient.addColorStop(1, 'rgba(45, 76, 49, 0)');
+
+        new Chart(ctxTrend, {
+            type: 'line',
+            data: {
+                labels: <?= json_encode($trend_labels) ?>,
+                datasets: [{
+                    label: 'Rating',
+                    data: <?= json_encode($trend_values) ?>,
+                    borderColor: '#2d4c31',
+                    borderWidth: 3,
+                    backgroundColor: gradient,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#b5935b',
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { min: 1, max: 10, grid: { color: '#f0f0f0' } },
+                    x: { grid: { display: false } }
                 }
             }
         });
 
-        // Chart.js Global Defaults
-        Chart.defaults.font.family = "'Montserrat', sans-serif";
-        Chart.defaults.color = '#4a3c31';
-        Chart.defaults.font.size = 11; 
-        Chart.defaults.font.weight = '700';
-
-        // 1. Dept Bar Chart
-        new Chart(document.getElementById('deptChart'), {
+        // 2. FOH Horizontal Bar
+        new Chart(document.getElementById('fohChart'), {
             type: 'bar',
             data: {
-                labels: ['Front Desk', 'Housekeeping', 'Accommodation', 'F&B Service', 'Overall'],
+                labels: ['Front Desk', 'Reservations', 'Telephone', 'Valet', 'Housekeeping', 'Accommodation', 'Safety', 'Security', 'Overall Service'],
                 datasets: [{
-                    label: 'Avg Rating',
                     data: [
-                        <?= number_format($dept_stats['fd'] ?? 0, 2) ?>, 
-                        <?= number_format($dept_stats['hk'] ?? 0, 2) ?>, 
-                        <?= number_format($dept_stats['acc'] ?? 0, 2) ?>, 
-                        <?= number_format($dept_stats['fnb'] ?? 0, 2) ?>,
-                        <?= number_format($dept_stats['ov'] ?? 0, 2) ?>
+                        <?= number_format($foh_stats['fd'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['res'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['tel'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['val'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['hk'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['acc'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['sft'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['sec'] ?? 0, 2) ?>, 
+                        <?= number_format($foh_stats['ov'] ?? 0, 2) ?>
                     ],
                     backgroundColor: '#2d4c31',
-                    borderRadius: 4
+                    borderRadius: 5
                 }]
             },
             options: { 
-                responsive: true,
-                maintainAspectRatio: false, 
-                scales: { 
-                    y: { 
-                        beginAtZero: true, 
-                        max: 3,
-                        ticks: { font: { weight: '800' } }
-                    },
-                    x: {
-                        ticks: { font: { weight: '800' } }
-                    }
-                }, 
-                plugins: { legend: { display: false } } 
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false, 
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true, max: 3 } }
             }
         });
 
-        // 2. F&B Radar Chart
-        new Chart(document.getElementById('fnbRadarChart'), {
-            type: 'radar',
+        // 3. F&B Horizontal Bar
+        new Chart(document.getElementById('fnbChart'), {
+            type: 'bar',
             data: {
-                labels: ['Food Quality', 'Serving Time', 'Wait Staff', 'Bar'],
+                labels: ['Food Quality', 'Serving Time', 'Wait Staff', 'Grooming', 'Behavior', 'Service', 'Bar', 'Bartender'],
                 datasets: [{
-                    label: 'Score',
                     data: [
-                        <?= number_format($fnb_details['fq'] ?? 0, 2) ?>, 
-                        <?= number_format($fnb_details['st'] ?? 0, 2) ?>, 
-                        <?= number_format($fnb_details['ws'] ?? 0, 2) ?>, 
-                        <?= number_format($fnb_details['bar'] ?? 0, 2) ?>
+                        <?= number_format($fnb_stats['fq'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['st'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['ws'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['gro'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['beh'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['ser'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['br'] ?? 0, 2) ?>, 
+                        <?= number_format($fnb_stats['bt'] ?? 0, 2) ?>
                     ],
-                    fill: true,
-                    backgroundColor: 'rgba(181, 147, 91, 0.2)',
-                    borderColor: '#b5935b'
+                    backgroundColor: '#b5935b',
+                    borderRadius: 5
                 }]
             },
             options: { 
-                responsive: true,
-                maintainAspectRatio: false, 
-                scales: { 
-                    r: { 
-                        beginAtZero: true, 
-                        max: 3, 
-                        ticks: { display: false },
-                        pointLabels: { font: { weight: '800', size: 10 } }
-                    } 
-                } 
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false, 
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true, max: 3 } }
             }
         });
 
-        // 3. Guest Retention Doughnut
+        // 4. Retention
         new Chart(document.getElementById('stayDoughnut'), {
             type: 'doughnut',
             data: {
                 labels: <?= json_encode(array_keys($first_stay_data)) ?>,
                 datasets: [{
                     data: <?= json_encode(array_values($first_stay_data)) ?>,
-                    backgroundColor: ['#2d4c31', '#b5935b']
+                    backgroundColor: ['#2d4c31', '#b5935b'],
+                    borderWidth: 0
                 }]
             },
             options: { 
-                responsive: true,
-                maintainAspectRatio: false, 
-                plugins: { 
-                    legend: { 
-                        position: 'bottom', 
-                        labels: { 
-                            boxWidth: 12, 
-                            padding: 10, 
-                            font: { size: 10, weight: '800' } 
-                        } 
-                    } 
-                } 
+                responsive: true, 
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: { legend: { position: 'bottom' } }
             }
         });
 
-        // 4. Purpose Horizontal Bar
+        // 5. Purpose
         new Chart(document.getElementById('purposeChart'), {
             type: 'bar',
             data: {
                 labels: <?= json_encode(array_keys($purpose_data)) ?>,
                 datasets: [{
-                    label: 'Guest Count',
                     data: <?= json_encode(array_values($purpose_data)) ?>,
                     backgroundColor: '#2d4c31',
-                    borderRadius: 4
+                    borderRadius: 5
                 }]
             },
             options: { 
-                responsive: true,
-                maintainAspectRatio: false, 
-                indexAxis: 'y', 
-                scales: {
-                    x: { ticks: { font: { weight: '800' } } },
-                    y: { ticks: { font: { weight: '800' } } }
-                },
-                plugins: { legend: { display: false } } 
+                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                plugins: { legend: { display: false } }
             }
         });
     </script>
